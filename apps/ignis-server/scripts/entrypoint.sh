@@ -32,6 +32,13 @@ mkdir -p "$DATA_DIR" "$VAULT_DIR" "$OBSIDIAN_DIR"
 chown -R "$PUID:$PGID" "$VAULT_DIR" "$OBSIDIAN_DIR" "$DATA_DIR" 2>/dev/null \
   || echo "[ignis] Aviso: nao foi possivel ajustar dono das pastas (provavelmente ja esta correto pelo host) - continuando."
 
+# npm/npx nao tem onde escrever cache/global installs no filesystem read-only da imagem.
+# Redireciona tudo para dentro de DATA_DIR, que e gravavel.
+export HOME="$DATA_DIR"
+export NPM_CONFIG_CACHE="$DATA_DIR/.npm-cache"
+NPM_GLOBAL_PREFIX="$DATA_DIR/npm-global"
+mkdir -p "$NPM_CONFIG_CACHE" "$NPM_GLOBAL_PREFIX"
+export PATH="$NPM_GLOBAL_PREFIX/bin:$PATH"
 OBSIDIAN_VERSION="${OBSIDIAN_VERSION:-1.12.7}"
 
 warn_obsidian_version() {
@@ -104,7 +111,7 @@ fi
 if ! command -v ob &>/dev/null; then
   echo "[ignis] Installing obsidian-headless..."
 
-  if npm install -g --prefix /usr/local obsidian-headless --silent 2>/dev/null; then
+  if npm install -g --prefix "$NPM_GLOBAL_PREFIX" obsidian-headless --silent 2>/dev/null; then
     OB_VERSION=$(ob --version 2>/dev/null)
 
     if [ -n "$OB_VERSION" ]; then
