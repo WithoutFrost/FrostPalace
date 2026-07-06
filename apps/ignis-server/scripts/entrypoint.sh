@@ -16,13 +16,13 @@ fi
 # Create user if UID doesn't exist, otherwise use existing
 if ! id -u "$PUID" >/dev/null 2>&1; then
   GROUP_NAME=$(getent group "$PGID" | cut -d: -f1)
-  useradd -u "$PUID" -g "$PGID" -m -s /bin/bash ignis 2>/dev/null || useradd -u "$PUID" -g "$GROUP_NAME" -M -N ignis
+  useradd -u "$PUID" -g "$PGID" -m -s /bin/bash ignis 2>/dev/null || \
+  useradd -u "$PUID" -g "$GROUP_NAME" -M -N ignis
   RUN_USER="ignis"
 else
   RUN_USER=$(id -un "$PUID")
   echo "[ignis] Using existing user $RUN_USER (UID $PUID)"
 fi
-
 
 DATA_DIR="${DATA_ROOT:-/app/data}"
 VAULT_DIR="${VAULT_ROOT:-/vaults}"
@@ -32,13 +32,13 @@ mkdir -p "$DATA_DIR" "$VAULT_DIR" "$OBSIDIAN_DIR"
 chown -R "$PUID:$PGID" "$VAULT_DIR" "$OBSIDIAN_DIR" "$DATA_DIR" 2>/dev/null \
   || echo "[ignis] Aviso: nao foi possivel ajustar dono das pastas (provavelmente ja esta correto pelo host) - continuando."
 
-# npm/npx nao tem onde escrever cache/global installs no filesystem read-only da imagem.
-# Redireciona tudo para dentro de DATA_DIR, que e gravavel.
+# npm/npx cache
 export HOME="$DATA_DIR"
 export NPM_CONFIG_CACHE="$DATA_DIR/.npm-cache"
 NPM_GLOBAL_PREFIX="$DATA_DIR/npm-global"
 mkdir -p "$NPM_CONFIG_CACHE" "$NPM_GLOBAL_PREFIX"
 export PATH="$NPM_GLOBAL_PREFIX/bin:$PATH"
+
 OBSIDIAN_VERSION="${OBSIDIAN_VERSION:-1.12.7}"
 
 warn_obsidian_version() {
@@ -49,7 +49,6 @@ warn_obsidian_version() {
 
 if [ ! -f "$OBSIDIAN_DIR/index.html" ]; then
   if [ -n "$OBSIDIAN_PACKAGE" ]; then
-    # Offline / restricted networks: unpack an operator-supplied package instead of downloading.
     if [ ! -f "$OBSIDIAN_PACKAGE" ]; then
       echo "[ignis] ERROR: OBSIDIAN_PACKAGE='$OBSIDIAN_PACKAGE' but that file does not exist."
       exit 1
@@ -78,14 +77,15 @@ if [ ! -f "$OBSIDIAN_DIR/index.html" ]; then
         npx --yes @electron/asar extract "$OBSIDIAN_PACKAGE" "$OBSIDIAN_DIR"
         ;;
       *)
-        echo "[ignis] ERROR: unsupported OBSIDIAN_PACKAGE format. Supported: .deb, .asar.gz, .asar"
+        echo "[ignis] ERROR: unsupported OBSIDIAN_PACKAGE format."
         exit 1
         ;;
     esac
   else
     echo "[ignis] First run. Downloading Obsidian v${OBSIDIAN_VERSION}..."
 
-    curl -fSL "https://github.com/obsidianmd/obsidian-releases/releases/download/v${OBSIDIAN_VERSION}/obsidian-${OBSIDIAN_VERSION}.asar.gz" \
+    curl -fSL \
+      "https://github.com/obsidianmd/obsidian-releases/releases/download/v${OBSIDIAN_VERSION}/obsidian-${OBSIDIAN_VERSION}.asar.gz" \
       -o /tmp/obsidian.asar.gz
 
     echo "[ignis] Unpacking asar..."
@@ -96,7 +96,7 @@ if [ ! -f "$OBSIDIAN_DIR/index.html" ]; then
   fi
 
   if [ ! -f "$OBSIDIAN_DIR/index.html" ]; then
-    echo "[ignis] ERROR: setup did not produce $OBSIDIAN_DIR/index.html; the Obsidian package may be invalid."
+    echo "[ignis] ERROR: setup did not produce $OBSIDIAN_DIR/index.html"
     exit 1
   fi
 
@@ -105,13 +105,11 @@ else
   echo "[ignis] Obsidian already set up."
 fi
 
-
-# Install obsidian-headless (ob CLI) if not already present.
-# Not included in the image for legal reasons - installed at runtime.
+# Install obsidian-headless
 if ! command -v ob &>/dev/null; then
   echo "[ignis] Installing obsidian-headless..."
 
-  if npm install -g --prefix "$NPM_GLOBAL_PREFIX" obsidian-headless --silent 2>/dev/null; then
+  if npm install -g --prefix "$NPM_GLOBAL_PREFIX" obsidian-headless --silent; then
     OB_VERSION=$(ob --version 2>/dev/null)
 
     if [ -n "$OB_VERSION" ]; then
@@ -120,11 +118,21 @@ if ! command -v ob &>/dev/null; then
       echo "[ignis] WARNING: obsidian-headless installed but 'ob' command not working."
     fi
   else
-    echo "[ignis] WARNING: Failed to install obsidian-headless. Headless sync will not be available."
+    echo "[ignis] WARNING: Failed to install obsidian-headless."
   fi
 else
   echo "[ignis] obsidian-headless $(ob --version 2>/dev/null) available."
 fi
 
-# Run as the determined user
-exec gosu "$RUN_USER" node /app/apps/ignis-server/server/index.js
+echo "[ignis] UID=$(id -u)"
+echo "[ignis] USER=$(whoami)"
+echo "[ignis] RUN_USER=$RUN_USER"
+
+# Executa corretamente tanto no Docker quanto no Pterodactyl
+if [ "$(id -u)" = "0" ]; then
+  echo "[ignis] Switching to $RUN_USER..."
+  exec gosu "$RUN_USER" node /app/apps/ignis-server/server/index.js
+else
+  echo "[ignis] Already running as $(whoami), starting server..."
+  exec node /app/apps/ignis-server/server/index.js
+fi
