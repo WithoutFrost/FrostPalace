@@ -29,7 +29,8 @@ VAULT_DIR="${VAULT_ROOT:-/vaults}"
 OBSIDIAN_DIR="${OBSIDIAN_ASSETS_PATH:-/app/obsidian-app}"
 
 mkdir -p "$DATA_DIR" "$VAULT_DIR" "$OBSIDIAN_DIR"
-chown -R "$PUID:$PGID" "$VAULT_DIR" "$OBSIDIAN_DIR" "$DATA_DIR"
+chown -R "$PUID:$PGID" "$VAULT_DIR" "$OBSIDIAN_DIR" "$DATA_DIR" 2>/dev/null \
+  || echo "[ignis] Aviso: nao foi possivel ajustar dono das pastas (provavelmente ja esta correto pelo host) - continuando."
 
 OBSIDIAN_VERSION="${OBSIDIAN_VERSION:-1.12.7}"
 
