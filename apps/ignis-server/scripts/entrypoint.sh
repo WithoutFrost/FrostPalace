@@ -24,10 +24,13 @@ else
 fi
 
 
-mkdir -p /app/data
-chown -R "$PUID:$PGID" /vaults /app/obsidian-app /app/data
+DATA_DIR="${DATA_ROOT:-/app/data}"
+VAULT_DIR="${VAULT_ROOT:-/vaults}"
+OBSIDIAN_DIR="${OBSIDIAN_ASSETS_PATH:-/app/obsidian-app}"
 
-OBSIDIAN_DIR="/app/obsidian-app"
+mkdir -p "$DATA_DIR" "$VAULT_DIR" "$OBSIDIAN_DIR"
+chown -R "$PUID:$PGID" "$VAULT_DIR" "$OBSIDIAN_DIR" "$DATA_DIR"
+
 OBSIDIAN_VERSION="${OBSIDIAN_VERSION:-1.12.7}"
 
 warn_obsidian_version() {
